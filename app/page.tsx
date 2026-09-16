@@ -147,7 +147,7 @@ export default function BookingPage() {
 
   if (ticket) {
     return (
-      <div className="mt-4 overflow-hidden rounded-2xl bg-white text-black shadow-xl">
+      <div className="ticket-print mt-4 overflow-hidden rounded-2xl bg-white text-black shadow-xl">
         <div className="bg-black p-4 text-center text-white">
           <h1 className="text-xl font-extrabold tracking-wide">{settings.theatre_name.toUpperCase()}</h1>
           <p className="mt-0.5 text-[10px] tracking-[3px] text-slate-400">ADMISSION TICKET</p>

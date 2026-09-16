@@ -6,5 +6,8 @@ body { background: #05080c; color: #f7f8fa; }
 .seat-scroll::-webkit-scrollbar { display: none; }
 @media print {
   .no-print { display: none !important; }
+  header { display: none !important; position: static !important; }
   body { background: #fff !important; color: #000 !important; }
+  .ticket-print { margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  @page { margin: 12mm; }
 }
