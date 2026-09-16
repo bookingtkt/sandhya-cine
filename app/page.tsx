@@ -40,6 +40,8 @@ export default function BookingPage() {
   const [step, setStep] = useState(1); // 1 = movie+time, 2 = seats+confirm
   const [showNotes, setShowNotes] = useState(false);// booking-notes popup after "Continue to Seats"
   const [avail, setAvail] = useState<Record<string, number>>({});// seats left per "movieId::time"
+  const [modes, setModes] = useState<Record<string, string>>({});// admin sales mode per "movieId::time": online|counter|noshow
+  const modeOf = (mid: string, t: string) => modes[mid + "::" + t] || "online";
 
   useEffect(() => {
     const d: string[] = []; const t = new Date();
@@ -61,7 +63,7 @@ export default function BookingPage() {
   // seats-left per show for the chosen date (via PII-free API)
   useEffect(() => {
     (async () => {
-      setAvail({});
+      setAvail({}); setModes({});
       if (!date) return;
       try {
         const r = await fetch(`/api/availability?date=${date}`).then((x) => x.json());
@@ -69,6 +71,7 @@ export default function BookingPage() {
         const left: Record<string, number> = {};
         Object.keys(r.counts || {}).forEach((k) => { left[k] = TOTAL_SEATS - (r.counts[k] || 0); });
         setAvail(left);
+        setModes(r.modes || {});
       } catch {}
     })();
   }, [date]);
@@ -97,6 +100,9 @@ export default function BookingPage() {
   const goSeats = () => {
     setMsg("");
     if (!movieId || !showTime) { setMsg("Please select a movie and showtime."); return; }
+    const md = modeOf(movieId, showTime);
+    if (md === "noshow") { setMsg("This show is not available for booking."); return; }
+    if (md === "counter") { setMsg("Online booking closed for this show. Tickets are available at the counter."); return; }
     if (isBookingClosed(date, showTime)) { setMsg("Online booking closed for this show. Tickets are available at the counter."); return; }
     setShowNotes(true);
   };
@@ -114,6 +120,9 @@ export default function BookingPage() {
   const book = async () => {
     setMsg("");
     if (!movieId || !showTime) return setMsg("Please select a movie and showtime.");
+    const md0 = modeOf(movieId, showTime);
+    if (md0 === "noshow") return setMsg("This show is not available for booking.");
+    if (md0 === "counter") return setMsg("Online booking closed for this show. Tickets are available at the counter.");
     if (isBookingClosed(date, showTime)) return setMsg("Online booking closed for this show. Tickets are available at the counter.");
     if (!selected.length) return setMsg("Please select at least one seat.");
     if (!name.trim() || !phone.trim() || !email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setMsg("Enter valid name, phone and email.");
@@ -214,15 +223,17 @@ export default function BookingPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(m.timings || []).map((t) => {
                     const left = avail[m.id + "::" + t] ?? TOTAL_SEATS;
+                    const md = modeOf(m.id, t);
                     const started = isShowStarted(date, t);
-                    const closed = started || isBookingClosed(date, t);
+                    const closed = started || isBookingClosed(date, t) || md === "counter";
+                    const noshow = md === "noshow";
                     const full = left <= 0;
-                    const dis = closed || full;
+                    const dis = closed || full || noshow;
                     const active = movieId === m.id && showTime === t;
                     return (
                       <button key={t} disabled={dis} onClick={() => { setMovieId(m.id); setShowTime(t); }} className={`rounded-lg border px-3 py-2 text-xs font-bold ${active ? "bg-brand text-black" : dis ? "border-white/10 text-slate-500" : "border-white/20"}`}>
                         <span className="block">{t}</span>
-                        <span className={`mt-0.5 block text-[10px] font-normal ${active ? "text-black" : closed || full ? "text-red-400" : "text-green-400"}`}>{started ? "Started" : closed ? "Counter only" : full ? "Full" : left + " left"}</span>
+                        <span className={`mt-0.5 block text-[10px] font-normal ${active ? "text-black" : closed || full || noshow ? "text-red-400" : "text-green-400"}`}>{noshow ? "No show" : started ? "Started" : closed ? "Counter only" : full ? "Full" : left + " left"}</span>
                       </button>
                     );
                   })}

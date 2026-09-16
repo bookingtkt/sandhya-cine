@@ -93,6 +93,16 @@ export function isShowStarted(dateISO: string, timing: string): boolean {
 // Online sales close 15 minutes before showtime; counter sales continue.
 export const BOOKING_CUTOFF_MINUTES = 15;
 
+export type ShowMode = "online" | "counter" | "noshow";
+
+export const SHOW_MODES: ShowMode[] = ["online", "counter", "noshow"];
+
+export function showModeLabel(m?: string): string {
+  if (m === "counter") return "Counter only";
+  if (m === "noshow") return "No show";
+  return "Online";
+}
+
 export function isBookingClosed(dateISO: string, timing: string): boolean {
   const today = kolkataToday();
   if (!dateISO) return false;

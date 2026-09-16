@@ -50,6 +50,19 @@ create table if not exists bookings (
 );
 create index if not exists bookings_lookup_idx on bookings (show_date, movie_id, show_time, status);
 
+-- 3b) Show overrides (per-show online sales control: online | counter | noshow)
+create table if not exists show_overrides (
+  id uuid primary key default gen_random_uuid(),
+  movie_id uuid references movies(id) on delete cascade,
+  show_date date not null,
+  show_time text not null,
+  mode text not null default 'online' check (mode in ('online', 'counter', 'noshow')),
+  note text default '',
+  updated_at timestamptz default now(),
+  unique (movie_id, show_date, show_time)
+);
+create index if not exists show_overrides_lookup_idx on show_overrides (show_date, movie_id);
+
 -- 4) Storage bucket for posters (create via Dashboard → Storage → New bucket "posters", public ON)
 -- SQL fallback:
 insert into storage.buckets (id, name, public) values ('posters','posters', true)
@@ -59,6 +72,7 @@ on conflict (id) do nothing;
 alter table settings enable row level security;
 alter table movies enable row level security;
 alter table bookings enable row level security;
+alter table show_overrides enable row level security;
 
 -- Public read for customer booking flow
 drop policy if exists "public read settings" on settings;
@@ -68,9 +82,6 @@ create policy "public read movies" on movies for select using (true);
 
 -- Writes go through service-role API routes, so no public insert/update policies.
 -- Admin dashboard reads bookings via service-role API too (see /api routes), so keep RLS locked:
--- (create these only if you want logged-in Supabase users to read bookings directly)
--- drop policy if exists "auth read bookings" on bookings;
--- create policy "auth read bookings" on bookings for select to authenticated using (true);
 
 -- 6) Storage policies for posters bucket
 drop policy if exists "public read posters" on storage.objects;

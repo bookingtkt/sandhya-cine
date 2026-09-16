@@ -17,7 +17,39 @@ export async function GET(req: Request) {
   const list = bookings || [];
   const conf = list.filter((b: any) => b.status === "Confirmed");
   const stats = { n: conf.length, seats: conf.reduce((a: number, b: any) => a + (b.seats || []).length, 0), rev: conf.reduce((a: number, b: any) => a + Number(b.total_amount || 0), 0) };
-  return NextResponse.json({ success: true, bookings: list, stats });
+  // Per-movie / per-show revenue (all confirmed bookings, not just latest 500)
+  let sales: any[] = [];
+  let movieTotals: any[] = [];
+  try {
+    const { data: all } = await sb.from("bookings").select("movie_id,show_date,show_time,seats,total_amount").eq("status", "Confirmed").limit(5000);
+    const { data: movs } = await sb.from("movies").select("id,title");
+    const titleOf: Record<string, string> = {};
+    (movs || []).forEach((m: any) => { titleOf[m.id] = m.title; });
+    const byShow: Record<string, any> = {};
+    (all || []).forEach((b: any) => {
+      const k = `${b.movie_id}||${b.show_date}||${b.show_time}`;
+      if (!byShow[k]) byShow[k] = { movie_id: b.movie_id, title: titleOf[b.movie_id] || "Deleted movie", show_date: b.show_date, show_time: b.show_time, tickets: 0, bookings: 0, revenue: 0 };
+      byShow[k].tickets += (b.seats || []).length;
+      byShow[k].bookings += 1;
+      byShow[k].revenue += Number(b.total_amount || 0);
+    });
+    sales = Object.values(byShow).sort((a: any, b: any) => String(b.show_date).localeCompare(String(a.show_date)) || String(b.show_time).localeCompare(String(a.show_time)));
+    const byMovie: Record<string, any> = {};
+    sales.forEach((r: any) => {
+      if (!byMovie[r.movie_id]) byMovie[r.movie_id] = { movie_id: r.movie_id, title: r.title, tickets: 0, bookings: 0, revenue: 0 };
+      byMovie[r.movie_id].tickets += r.tickets;
+      byMovie[r.movie_id].bookings += r.bookings;
+      byMovie[r.movie_id].revenue += r.revenue;
+    });
+    movieTotals = Object.values(byMovie).sort((a: any, b: any) => b.revenue - a.revenue);
+  } catch {}
+  // Admin per-show sales-mode overrides
+  let overrides: any[] = [];
+  try {
+    const { data: ov } = await sb.from("show_overrides").select("*").order("show_date", { ascending: false }).limit(500);
+    overrides = ov || [];
+  } catch {}
+  return NextResponse.json({ success: true, bookings: list, stats, sales, movieTotals, overrides });
 }
 
 export async function POST(req: Request) {
@@ -57,6 +89,33 @@ export async function POST(req: Request) {
   if (action === "cancel-booking") {
     await sb.from("bookings").update({ status: "Cancelled" }).eq("booking_code", body.id);
     return NextResponse.json({ success: true, message: "Booking cancelled." });
+  }
+  if (action === "set-show-mode") {
+    const movieId = String(body.movieId || "").trim();
+    const date = String(body.date || "").trim();
+    const showTime = String(body.showTime || "").trim();
+    const mode = String(body.mode || "online").trim();
+    if (!movieId || !date || !showTime) return NextResponse.json({ success: false, message: "Pick movie, date and show." });
+    if (!["online", "counter", "noshow"].includes(mode)) return NextResponse.json({ success: false, message: "Invalid mode." });
+    if (mode === "online") {
+      const { error } = await sb.from("show_overrides").delete().eq("movie_id", movieId).eq("show_date", date).eq("show_time", showTime);
+      if (error) return NextResponse.json({ success: false, message: error.message + " (run supabase/migration_show_overrides.sql first)" });
+      return NextResponse.json({ success: true, message: "Show set back to Online." });
+    }
+    const { error } = await sb.from("show_overrides").upsert(
+      { movie_id: movieId, show_date: date, show_time: showTime, mode, updated_at: new Date().toISOString() },
+      { onConflict: "movie_id,show_date,show_time" }
+    );
+    if (error) return NextResponse.json({ success: false, message: error.message + " (run supabase/migration_show_overrides.sql first)" });
+    return NextResponse.json({ success: true, message: mode === "counter" ? "Show set to Counter sales only." : "Show marked as No show." });
+  }
+  if (action === "clear-show-mode") {
+    const movieId = String(body.movieId || "").trim();
+    const date = String(body.date || "").trim();
+    const showTime = String(body.showTime || "").trim();
+    const { error } = await sb.from("show_overrides").delete().eq("movie_id", movieId).eq("show_date", date).eq("show_time", showTime);
+    if (error) return NextResponse.json({ success: false, message: error.message });
+    return NextResponse.json({ success: true, message: "Override cleared (back to Online)." });
   }
   return NextResponse.json({ success: false, message: "Unknown action." });
 }

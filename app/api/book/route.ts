@@ -16,6 +16,12 @@ export async function POST(req: Request) {
     if (bad) return NextResponse.json({ success: false, message: "Invalid seat: " + bad }, { status: 400 });
 
     const sb = serviceSupabase();
+    // Admin per-show sales control: counter-only or no-show blocks online booking.
+    try {
+      const { data: ov } = await sb.from("show_overrides").select("mode").eq("movie_id", movieId).eq("show_date", date).eq("show_time", showTime).maybeSingle();
+      if (ov?.mode === "noshow") return NextResponse.json({ success: false, message: "This show is not available for booking." }, { status: 400 });
+      if (ov?.mode === "counter") return NextResponse.json({ success: false, message: "Online booking closed for this show. Tickets are available at the counter." }, { status: 400 });
+    } catch {}
     // settings for pricing
     const { data: st } = await sb.from("settings").select("*").eq("id", 1).single();
     const price = Number(st?.ticket_price ?? 85), gstP = Number(st?.gst_percent ?? 0), fee = Number(st?.convenience_fee ?? 0);

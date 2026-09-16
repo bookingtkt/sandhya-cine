@@ -25,6 +25,11 @@ export default function AdminPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [movies, setMovies] = useState<any[]>([]);
   const [stats, setStats] = useState({ n: 0, seats: 0, rev: 0 });
+  const [sales, setSales] = useState<any[]>([]);
+  const [movieTotals, setMovieTotals] = useState<any[]>([]);
+  const [overrides, setOverrides] = useState<any[]>([]);
+  const [salesDate, setSalesDate] = useState("");
+  const [showCtl, setShowCtl] = useState({ movieId: "", date: "", showTime: "", mode: "counter" });
   const [qr, setQr] = useState(""); const [qrRes, setQrRes] = useState("");
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef<any>(null);
@@ -66,7 +71,7 @@ export default function AdminPage() {
     if (!c) { setEnvOk(false); return; }
     const h = await authHeaders();
     const b = await fetch("/api/admin-data", { headers: h as any }).then((r) => r.json());
-    if (b.success) { setBookings(b.bookings); setStats(b.stats); }
+    if (b.success) { setBookings(b.bookings); setStats(b.stats); setSales(b.sales || []); setMovieTotals(b.movieTotals || []); setOverrides(b.overrides || []); }
     const m = await c.from("movies").select("*").order("start_date", { ascending: false });
     setMovies(m.data || []);
     const st = await c.from("settings").select("*").eq("id", 1).single();
@@ -106,6 +111,22 @@ export default function AdminPage() {
     if (!confirm("Cancel " + code + "?")) return;
     const h = await authHeaders();
     const r = await fetch("/api/admin-data", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ action: "cancel-booking", id: code }) }).then((r) => r.json());
+    alert(r.message); load();
+  };
+
+  const titleOf = (id: string) => movies.find((m: any) => m.id === id)?.title || "Deleted movie";
+
+  const saveShowMode = async () => {
+    if (!showCtl.movieId || !showCtl.date || !showCtl.showTime) { alert("Pick movie, date and show."); return; }
+    const h = await authHeaders();
+    const r = await fetch("/api/admin-data", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ action: "set-show-mode", ...showCtl }) }).then((r) => r.json());
+    alert(r.message); if (r.success) load();
+  };
+
+  const clearShowMode = async (movieId: string, date: string, showTime: string) => {
+    if (!confirm(`Clear override for ${titleOf(movieId)} • ${date} • ${showTime}? (back to Online)`)) return;
+    const h = await authHeaders();
+    const r = await fetch("/api/admin-data", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ action: "clear-show-mode", movieId, date, showTime }) }).then((r) => r.json());
     alert(r.message); load();
   };
 
@@ -158,8 +179,8 @@ export default function AdminPage() {
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between"><h1 className="text-xl font-extrabold">🎬 Theatre Admin</h1><button onClick={logout} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold">Logout</button></div>
-      <div className="mt-2 flex gap-2">
-        {(["bookings", "movies", "settings", "verify"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-2 text-sm font-bold ${tab === t ? "bg-brand text-black" : "bg-card"}`}>{t}</button>)}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(["bookings", "sales", "shows", "movies", "settings", "verify"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-3 py-2 text-sm font-bold ${tab === t ? "bg-brand text-black" : "bg-card"}`}>{t}</button>)}
         <button onClick={load} className="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold">🔄</button>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
@@ -193,6 +214,91 @@ export default function AdminPage() {
             {(["theatre_name", "address", "phone", "email"] as const).map((k) => <input key={k} value={(s as any)[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} placeholder={k} className="rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />)}
             {(["ticket_price", "gst_percent", "convenience_fee"] as const).map((k) => <input key={k} type="number" value={(s as any)[k]} onChange={(e) => setS({ ...s, [k]: Number(e.target.value) })} placeholder={k} className="rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />)}
             <button onClick={saveSettings} className="rounded-lg bg-green-700 p-3 font-bold">💾 Save</button>
+          </div>
+        </div>
+      )}
+
+      {tab === "sales" && (
+        <div className="mt-3 grid gap-3">
+          <div className="rounded-xl bg-card p-4">
+            <h2 className="font-bold">💰 Revenue per Movie</h2>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[500px] text-left text-xs">
+                <thead><tr className="text-slate-400"><th className="p-2">Movie</th><th>Bookings</th><th>Tickets</th><th>Revenue</th></tr></thead>
+                <tbody>
+                  {movieTotals.map((r: any) => (
+                    <tr key={r.movie_id} className="border-t border-white/10">
+                      <td className="p-2 font-bold">{r.title}</td><td>{r.bookings}</td><td>{r.tickets}</td><td>₹{Number(r.revenue).toLocaleString("en-IN")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!movieTotals.length && <div className="p-4 text-center text-sm text-slate-400">No confirmed bookings yet.</div>}
+            </div>
+          </div>
+          <div className="rounded-xl bg-card p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="flex-1 font-bold">🎟️ Tickets & Revenue per Show</h2>
+              <input value={salesDate} onChange={(e) => setSalesDate(e.target.value)} type="date" className="rounded-lg border border-white/15 bg-black/40 p-2 text-xs" />
+              {salesDate && <button onClick={() => setSalesDate("")} className="rounded bg-slate-700 px-2 py-1 text-xs">Clear</button>}
+            </div>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[600px] text-left text-xs">
+                <thead><tr className="text-slate-400"><th className="p-2">Date</th><th>Movie</th><th>Show</th><th>Bookings</th><th>Tickets</th><th>Revenue</th></tr></thead>
+                <tbody>
+                  {sales.filter((r: any) => !salesDate || r.show_date === salesDate).map((r: any, i: number) => (
+                    <tr key={i} className="border-t border-white/10">
+                      <td className="p-2">{r.show_date}</td><td>{r.title}</td><td>{r.show_time}</td>
+                      <td>{r.bookings}</td><td>{r.tickets}</td><td>₹{Number(r.revenue).toLocaleString("en-IN")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!sales.filter((r: any) => !salesDate || r.show_date === salesDate).length && <div className="p-4 text-center text-sm text-slate-400">No sales for this filter.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "shows" && (
+        <div className="mt-3 grid gap-3">
+          <div className="rounded-xl bg-card p-4">
+            <h2 className="font-bold">🎛️ Show Sales Control — Counter / No Show</h2>
+            <p className="mt-1 text-xs text-slate-400">Switch a specific show to <b>Counter only</b> (online blocked, counter continues) or <b>No show</b> (fully hidden from booking). Default is <b>Online</b>.</p>
+            <div className="mt-2 grid gap-2">
+              <select value={showCtl.movieId} onChange={(e) => setShowCtl({ ...showCtl, movieId: e.target.value, showTime: "" })} className="rounded-lg border border-white/15 bg-black/40 p-3 text-sm">
+                <option value="">Select movie…</option>
+                {movies.map((m: any) => <option key={m.id} value={m.id}>{m.title}</option>)}
+              </select>
+              <div className="flex gap-2">
+                <input value={showCtl.date} onChange={(e) => setShowCtl({ ...showCtl, date: e.target.value })} type="date" className="flex-1 rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />
+                <select value={showCtl.showTime} onChange={(e) => setShowCtl({ ...showCtl, showTime: e.target.value })} className="flex-1 rounded-lg border border-white/15 bg-black/40 p-3 text-sm">
+                  <option value="">Show…</option>
+                  {((movies.find((m: any) => m.id === showCtl.movieId)?.timings) || []).map((t: string) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                {(["online", "counter", "noshow"] as const).map((md) => (
+                  <button key={md} onClick={() => setShowCtl({ ...showCtl, mode: md })} className={`flex-1 rounded-lg p-3 text-sm font-bold ${showCtl.mode === md ? "bg-brand text-black" : "bg-white/5"}`}>
+                    {md === "online" ? "🌐 Online" : md === "counter" ? "🏪 Counter only" : "🚫 No show"}
+                  </button>
+                ))}
+              </div>
+              <button onClick={saveShowMode} className="rounded-lg bg-green-700 p-3 font-bold">💾 Apply to this show</button>
+            </div>
+          </div>
+          <div className="rounded-xl bg-card p-4">
+            <h2 className="font-bold">Active overrides</h2>
+            <div className="mt-2 grid gap-2">
+              {overrides.map((o: any) => (
+                <div key={o.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-3 text-sm">
+                  <div className="flex-1"><b>{titleOf(o.movie_id)}</b> <span className="text-slate-400">• {o.show_date} • {o.show_time}</span></div>
+                  <span className={`rounded px-2 py-1 text-xs font-bold ${o.mode === "counter" ? "bg-yellow-600" : "bg-red-600"}`}>{o.mode === "counter" ? "Counter only" : "No show"}</span>
+                  <button onClick={() => clearShowMode(o.movie_id, o.show_date, o.show_time)} className="rounded bg-slate-700 px-2 py-1 text-xs">Clear → Online</button>
+                </div>
+              ))}
+              {!overrides.length && <div className="p-4 text-center text-sm text-slate-400">No overrides — all shows are Online.</div>}
+            </div>
           </div>
         </div>
       )}
