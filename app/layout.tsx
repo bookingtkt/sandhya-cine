@@ -17,7 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="text-lg font-extrabold">Ambadi 2k Cinemas</div>
               <div className="text-xs text-slate-400">Movies • Book Tickets • Enjoy Cinema</div>
             </div>
-            <a href="/admin" className="no-print rounded-lg border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10">Admin</a>
           </header>
           {children}
         </div>
