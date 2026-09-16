@@ -38,13 +38,10 @@ export async function POST(req: Request) {
     });
     if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
 
-    // fire-and-forget email (Resend). Booking succeeds even if email fails.
-    let emailSent = false;
-    try {
-      const base = process.env.NEXT_PUBLIC_SITE_URL || "";
-      await fetch(`${base}/api/send-ticket`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) }).then((r) => r.json()).then((j) => { emailSent = !!j.success; }).catch(() => {});
-    } catch {}
-    return NextResponse.json({ success: true, bookingCode: code, seats: clean, ticketAmount, gst, convenience: conv, total, gstPercent: gstP, emailSent });
+    // Email the ticket directly (no self-fetch). Booking succeeds even if email fails.
+    const { sendTicketEmail } = await import("@/lib/ticket-email");
+    const mail = await sendTicketEmail(code);
+    return NextResponse.json({ success: true, bookingCode: code, seats: clean, ticketAmount, gst, convenience: conv, total, gstPercent: gstP, emailSent: mail.success, emailMessage: mail.message });
   } catch (e: any) {
     return NextResponse.json({ success: false, message: e.message }, { status: 500 });
   }
