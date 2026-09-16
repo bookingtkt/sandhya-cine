@@ -89,3 +89,16 @@ export function isShowStarted(dateISO: string, timing: string): boolean {
   if (mins === null) return false;
   return kolkataNowMinutes() >= mins;
 }
+
+// Online sales close 15 minutes before showtime; counter sales continue.
+export const BOOKING_CUTOFF_MINUTES = 15;
+
+export function isBookingClosed(dateISO: string, timing: string): boolean {
+  const today = kolkataToday();
+  if (!dateISO) return false;
+  if (dateISO < today) return true;
+  if (dateISO > today) return false;
+  const mins = parseTimeToMinutes(timing);
+  if (mins === null) return false;
+  return kolkataNowMinutes() >= mins - BOOKING_CUTOFF_MINUTES;
+}

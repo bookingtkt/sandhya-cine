@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@supabase/supabase-js";
-import { SEAT_LAYOUT, calcPricing, inr, toISODate, displayDate, TOTAL_SEATS, isShowStarted } from "@/lib/seats";
+import { SEAT_LAYOUT, calcPricing, inr, toISODate, displayDate, TOTAL_SEATS, isShowStarted, isBookingClosed } from "@/lib/seats";
 
 const supabase = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
@@ -86,7 +86,7 @@ export default function BookingPage() {
   const goSeats = () => {
     setMsg("");
     if (!movieId || !showTime) { setMsg("Please select a movie and showtime."); return; }
-    if (isShowStarted(date, showTime)) { setMsg("This show has already started and can't be booked."); return; }
+    if (isBookingClosed(date, showTime)) { setMsg("Online booking closed for this show. Tickets are available at the counter."); return; }
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -94,7 +94,7 @@ export default function BookingPage() {
   const book = async () => {
     setMsg("");
     if (!movieId || !showTime) return setMsg("Please select a movie and showtime.");
-    if (isShowStarted(date, showTime)) return setMsg("This show has already started and can't be booked.");
+    if (isBookingClosed(date, showTime)) return setMsg("Online booking closed for this show. Tickets are available at the counter.");
     if (!selected.length) return setMsg("Please select at least one seat.");
     if (!name.trim() || !phone.trim() || !email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setMsg("Enter valid name, phone and email.");
     setLoading(true);
@@ -195,13 +195,14 @@ export default function BookingPage() {
                   {(m.timings || []).map((t) => {
                     const left = avail[m.id + "::" + t] ?? TOTAL_SEATS;
                     const started = isShowStarted(date, t);
+                    const closed = started || isBookingClosed(date, t);
                     const full = left <= 0;
-                    const dis = started || full;
+                    const dis = closed || full;
                     const active = movieId === m.id && showTime === t;
                     return (
                       <button key={t} disabled={dis} onClick={() => { setMovieId(m.id); setShowTime(t); }} className={`rounded-lg border px-3 py-2 text-xs font-bold ${active ? "bg-brand text-black" : dis ? "border-white/10 text-slate-500" : "border-white/20"}`}>
                         <span className="block">{t}</span>
-                        <span className={`mt-0.5 block text-[10px] font-normal ${active ? "text-black" : started || full ? "text-red-400" : "text-green-400"}`}>{started ? "Started" : full ? "Full" : left + " left"}</span>
+                        <span className={`mt-0.5 block text-[10px] font-normal ${active ? "text-black" : closed || full ? "text-red-400" : "text-green-400"}`}>{started ? "Started" : closed ? "Counter only" : full ? "Full" : left + " left"}</span>
                       </button>
                     );
                   })}
