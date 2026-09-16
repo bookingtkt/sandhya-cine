@@ -2,10 +2,24 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const sb = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+let _client: any = null;
+const getClient = () => {
+  if (_client) return _client;
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+    if (!url || !key) return null;
+    _client = createClient(url, key);
+    return _client;
+  } catch {
+    return null;
+  }
+};
+const sb = () => getClient();
 
 export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
+  const [envOk, setEnvOk] = useState(true);
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [msg, setMsg] = useState("");
   const [tab, setTab] = useState("bookings");
   const [bookings, setBookings] = useState<any[]>([]);
@@ -18,28 +32,42 @@ export default function AdminPage() {
   // settings
   const [s, setS] = useState({ theatre_name: "", address: "", phone: "", email: "", ticket_price: 85, gst_percent: 0, convenience_fee: 0 });
 
-  useEffect(() => { sb().auth.getUser().then(({ data }) => setUser(data.user || null)); }, []);
+  useEffect(() => {
+    try {
+      const c = sb();
+      if (!c) { setEnvOk(false); return; }
+      c.auth.getUser().then(({ data }: any) => setUser(data.user || null)).catch(() => {});
+    } catch { setEnvOk(false); }
+  }, []);
 
   const login = async () => {
     setMsg("");
-    const { data, error } = await sb().auth.signInWithPassword({ email, password });
+    const c = sb();
+    if (!c) { setMsg("App keys missing on server. Add env vars in Vercel and Redeploy."); setEnvOk(false); return; }
+    const { data, error } = await c.auth.signInWithPassword({ email, password });
     if (error) return setMsg(error.message);
     setUser(data.user);
   };
-  const logout = async () => { await sb().auth.signOut(); setUser(null); };
+  const logout = async () => { try { await sb()?.auth.signOut(); } catch {} setUser(null); };
 
   const authHeaders = async () => {
-    const { data } = await sb().auth.getSession();
-    return { "x-admin-token": data.session?.access_token || "" };
+    try {
+      const c = sb();
+      if (!c) return {};
+      const { data } = await c.auth.getSession();
+      return { "x-admin-token": data.session?.access_token || "" };
+    } catch { return {}; }
   };
 
   const load = async () => {
+    const c = sb();
+    if (!c) { setEnvOk(false); return; }
     const h = await authHeaders();
     const b = await fetch("/api/admin-data", { headers: h as any }).then((r) => r.json());
     if (b.success) { setBookings(b.bookings); setStats(b.stats); }
-    const m = await sb().from("movies").select("*").order("start_date", { ascending: false });
+    const m = await c.from("movies").select("*").order("start_date", { ascending: false });
     setMovies(m.data || []);
-    const st = await sb().from("settings").select("*").eq("id", 1).single();
+    const st = await c.from("settings").select("*").eq("id", 1).single();
     if (st.data) setS({ theatre_name: st.data.theatre_name || "", address: st.data.address || "", phone: st.data.phone || "", email: st.data.email || "", ticket_price: Number(st.data.ticket_price), gst_percent: Number(st.data.gst_percent), convenience_fee: Number(st.data.convenience_fee) });
   };
   useEffect(() => { if (user) load(); }, [user]);
@@ -53,10 +81,12 @@ export default function AdminPage() {
   const saveMovie = async () => {
     let poster = f.poster_url;
     if (file) {
+      const c = sb();
+      if (!c) { alert("App keys missing on server. Add env vars in Vercel and Redeploy."); return; }
       const path = `${Date.now()}-${file.name}`.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-      const up = await sb().storage.from("posters").upload(path, file, { upsert: true });
+      const up = await c.storage.from("posters").upload(path, file, { upsert: true });
       if (up.error) return alert("Poster upload failed: " + up.error.message + " (create public bucket 'posters' first)");
-      poster = sb().storage.from("posters").getPublicUrl(path).data.publicUrl;
+      poster = c.storage.from("posters").getPublicUrl(path).data.publicUrl;
     }
     const h = await authHeaders();
     const r = await fetch("/api/admin-data", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ action: "save-movie", movie: { ...f, poster_url: poster } }) }).then((r) => r.json());
@@ -87,6 +117,7 @@ export default function AdminPage() {
   if (!user) return (
     <div className="mx-auto mt-10 max-w-sm rounded-2xl border border-white/10 bg-card p-6">
       <h1 className="text-center text-xl font-extrabold">🔐 Admin Login</h1>
+      {!envOk && <div className="mb-3 rounded-lg bg-red-900/50 p-3 text-center text-xs text-red-200">Server keys missing. Add env vars in Vercel Settings and Redeploy.</div>}
       <p className="mb-3 text-center text-xs text-slate-400">Use your Supabase Auth email (create user in Supabase → Authentication → Users)</p>
       <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="mb-2 w-full rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />
       <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Password" className="mb-2 w-full rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />
