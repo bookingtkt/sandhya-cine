@@ -47,3 +47,45 @@ export const displayDate = (iso: string) => {
 
 export const parseTimings = (v: string) =>
   String(v || "").split(/[,\n]+/).map((x) => x.trim()).filter(Boolean);
+
+export const TOTAL_SEATS = SEAT_LAYOUT.reduce((a, b) => a + b, 0);
+
+// "2:30 PM" -> minutes since midnight. null if unparseable.
+export function parseTimeToMinutes(t: string): number | null {
+  const s = String(t || "").trim().toUpperCase();
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2] || 0);
+  const ap = m[3] || "";
+  if (min > 59) return null;
+  if (ap) {
+    if (h < 1 || h > 12) return null;
+    if (ap === "AM" && h === 12) h = 0;
+    if (ap === "PM" && h !== 12) h += 12;
+  } else if (h > 23) return null;
+  return h * 60 + min;
+}
+
+const TZ = "Asia/Kolkata";
+
+export function kolkataToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+export function kolkataNowMinutes(): number {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+  const [h, m] = parts.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// True when the show already started (or date is past) — booking must be blocked.
+export function isShowStarted(dateISO: string, timing: string): boolean {
+  const today = kolkataToday();
+  if (!dateISO) return false;
+  if (dateISO < today) return true;
+  if (dateISO > today) return false;
+  const mins = parseTimeToMinutes(timing);
+  if (mins === null) return false;
+  return kolkataNowMinutes() >= mins;
+}

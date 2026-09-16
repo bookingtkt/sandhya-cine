@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { serviceSupabase } from "@/lib/supabase";
-import { validSeatSet } from "@/lib/seats";
+import { validSeatSet, isShowStarted, kolkataToday } from "@/lib/seats";
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +9,8 @@ export async function POST(req: Request) {
     if (!date || !movieId || !showTime) return NextResponse.json({ success: false, message: "Select date/movie/show." }, { status: 400 });
     if (!name?.trim() || !phone?.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || "")) return NextResponse.json({ success: false, message: "Enter valid name, phone, email." }, { status: 400 });
     if (!clean.length) return NextResponse.json({ success: false, message: "Select seats." }, { status: 400 });
+    if (date < kolkataToday()) return NextResponse.json({ success: false, message: "Past dates cannot be booked." }, { status: 400 });
+    if (isShowStarted(date, showTime)) return NextResponse.json({ success: false, message: "This show has already started and can no longer be booked." }, { status: 400 });
     const valid = validSeatSet();
     const bad = clean.find((s) => !valid.has(s));
     if (bad) return NextResponse.json({ success: false, message: "Invalid seat: " + bad }, { status: 400 });

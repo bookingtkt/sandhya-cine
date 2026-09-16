@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@supabase/supabase-js";
-import { SEAT_LAYOUT, calcPricing, inr, toISODate, displayDate } from "@/lib/seats";
+import { SEAT_LAYOUT, calcPricing, inr, toISODate, displayDate, TOTAL_SEATS, isShowStarted } from "@/lib/seats";
 
 const supabase = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
@@ -27,6 +27,7 @@ export default function BookingPage() {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false); const [msg, setMsg] = useState("");
   const [ticket, setTicket] = useState<any>(null);
+  const [avail, setAvail] = useState<Record<string, number>>({});// seats left per "movieId::time"
 
   useEffect(() => {
     const d: string[] = []; const t = new Date();
@@ -42,6 +43,26 @@ export default function BookingPage() {
       if (!date) return;
       const m = await sb.from("movies").select("*").eq("status", "Active").lte("start_date", date).gte("end_date", date).order("title");
       setMovies(((m.data as any[]) || []).map((r) => ({ ...r, title: r.title })));
+    })();
+  }, [date]);
+
+  // seats-left per show for the chosen date (for the timing buttons)
+  useEffect(() => {
+    (async () => {
+      setAvail({});
+      if (!date) return;
+      try {
+        const sb = supabase();
+        const { data } = await sb.from("bookings").select("movie_id,show_time,seats").eq("show_date", date).eq("status", "Confirmed");
+        const counts: Record<string, number> = {};
+        (data || []).forEach((b: any) => {
+          const k = b.movie_id + "::" + b.show_time;
+          counts[k] = (counts[k] || 0) + ((b.seats || []).length);
+        });
+        const left: Record<string, number> = {};
+        Object.keys(counts).forEach((k) => { left[k] = TOTAL_SEATS - counts[k]; });
+        setAvail(left);
+      } catch {}
     })();
   }, [date]);
 
@@ -70,6 +91,7 @@ export default function BookingPage() {
   const book = async () => {
     setMsg("");
     if (!movieId || !showTime) return setMsg("Please select a movie and showtime.");
+    if (isShowStarted(date, showTime)) return setMsg("This show has already started and can't be booked.");
     if (!selected.length) return setMsg("Please select at least one seat.");
     if (!name.trim() || !phone.trim() || !email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return setMsg("Enter valid name, phone and email.");
     setLoading(true);
@@ -134,9 +156,19 @@ export default function BookingPage() {
                 <div className="flex items-start gap-2"><div className="flex-1 font-extrabold">{m.title}</div><span className="rounded bg-green-500 px-1.5 py-0.5 text-[10px] font-bold text-black">{m.quality}</span></div>
                 <div className="mt-1 line-clamp-2 text-xs text-slate-400">{m.description}</div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {(m.timings || []).map((t) => (
-                    <button key={t} onClick={() => { setMovieId(m.id); setShowTime(t); }} className={`rounded-lg border px-3 py-2 text-xs font-bold ${movieId === m.id && showTime === t ? "bg-brand text-black" : "border-white/20"}`}>{t}</button>
-                  ))}
+                  {(m.timings || []).map((t) => {
+                    const left = avail[m.id + "::" + t] ?? TOTAL_SEATS;
+                    const started = isShowStarted(date, t);
+                    const full = left <= 0;
+                    const dis = started || full;
+                    const active = movieId === m.id && showTime === t;
+                    return (
+                      <button key={t} disabled={dis} onClick={() => { setMovieId(m.id); setShowTime(t); }} className={`rounded-lg border px-3 py-2 text-xs font-bold ${active ? "bg-brand text-black" : dis ? "border-white/10 text-slate-500" : "border-white/20"}`}>
+                        <span className="block">{t}</span>
+                        <span className={`mt-0.5 block text-[10px] font-normal ${active ? "text-black" : started || full ? "text-red-400" : "text-green-400"}`}>{started ? "Started" : full ? "Full" : left + " left"}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -149,7 +181,9 @@ export default function BookingPage() {
         <div className="mt-4 rounded-2xl border border-white/10 bg-card p-3">
           <div className="text-center text-sm font-bold">{movie?.title} • {displayDate(date)} • {showTime}</div>
           <div className="mx-auto mt-3 max-w-sm"><div className="h-1.5 rounded-full bg-white shadow-[0_0_12px_#fff9]" /><div className="mt-1 text-center text-[10px] tracking-[4px] text-slate-400">SCREEN</div></div>
+          <div className="mt-1 text-center text-[10px] text-slate-500">← swipe to see all seats →</div>
           <div className="seat-scroll mt-2 max-h-[320px] overflow-auto">
+            <div className="min-w-[800px] px-1">
             {SEAT_LAYOUT.map((count, r) => {
               const row = String.fromCharCode(65 + r);
               return (
@@ -163,6 +197,7 @@ export default function BookingPage() {
                 </div>
               );
             })}
+            </div>
           </div>
           <div className="mt-2 text-xs text-slate-300">Selected: <b>{selected.join(", ") || "—"}</b></div>
           <div className="mt-2 rounded-xl bg-black/30 p-3 text-sm">
