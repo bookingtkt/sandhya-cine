@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { background: #05080c; color: #f7f8fa; }
+.seat-scroll::-webkit-scrollbar { display: none; }
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+}
