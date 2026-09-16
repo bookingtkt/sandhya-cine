@@ -118,22 +118,41 @@ export default function BookingPage() {
 
   if (ticket) {
     return (
-      <div className="mt-4 rounded-2xl bg-white p-5 text-black">
-        <h1 className="text-center text-xl font-extrabold">{settings.theatre_name.toUpperCase()}</h1>
-        <p className="text-center text-xs text-gray-500">ADMISSION TICKET</p>
-        <div className="mt-3 text-sm">
-          <div className="font-bold">{movie?.title}</div>
-          <div>Date: {displayDate(date)} • Show: {showTime}</div>
-          <div>Customer: {name} • {phone}</div>
-          <div>Seats: {(ticket.seats || []).join(", ")}</div>
-          <div className="mt-2">Ticket ₹{inr(ticket.ticketAmount)} • GST ₹{inr(ticket.gst)} • Fee ₹{inr(ticket.convenience)}</div>
-          <div className="text-lg font-extrabold">Total ₹{inr(ticket.total)}</div>
+      <div className="mt-4 overflow-hidden rounded-2xl bg-white text-black shadow-xl">
+        <div className="bg-black p-4 text-center text-white">
+          <h1 className="text-xl font-extrabold tracking-wide">{settings.theatre_name.toUpperCase()}</h1>
+          <p className="mt-0.5 text-[10px] tracking-[3px] text-slate-400">ADMISSION TICKET</p>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <QRCodeSVG value={ticket.bookingCode} size={120} />
-          <div className="text-right text-xs">Booking ID<br /><b>{ticket.bookingCode}</b></div>
+        <div className="p-4">
+          <div className="flex items-center gap-3 border-b border-dashed border-slate-300 pb-3">
+            {movie?.poster_url
+              ? <img src={movie.poster_url} alt="" className="h-28 w-20 rounded-lg bg-slate-200 object-cover" />
+              : <div className="grid h-28 w-20 place-items-center rounded-lg bg-slate-200 text-[10px] text-slate-500">No Poster</div>}
+            <div className="min-w-0">
+              <div className="text-lg font-extrabold leading-tight">{movie?.title}</div>
+              <div className="mt-1 text-[11px] text-slate-500">{movie?.quality} • {displayDate(date)} • {showTime}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-b border-dashed border-slate-300 py-3 text-xs">
+            <div><div className="text-[9px] uppercase text-slate-400">Booking ID</div><b className="break-all">{ticket.bookingCode}</b></div>
+            <div><div className="text-[9px] uppercase text-slate-400">Seats</div><b>{(ticket.seats || []).join(", ")}</b></div>
+            <div><div className="text-[9px] uppercase text-slate-400">Customer</div><b>{name}</b></div>
+            <div><div className="text-[9px] uppercase text-slate-400">Phone</div><b>{phone}</b></div>
+          </div>
+          <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs">
+            <div className="mb-1 border-b border-slate-200 pb-1 text-[13px] font-extrabold">Fare Breakdown</div>
+            <div className="flex justify-between py-0.5 text-slate-600"><span>Ticket Fare</span><b className="text-black">₹{inr(ticket.ticketAmount)}</b></div>
+            <div className="flex justify-between py-0.5 text-slate-600"><span>GST</span><b className="text-black">₹{inr(ticket.gst)}</b></div>
+            <div className="flex justify-between py-0.5 text-slate-600"><span>Convenience Fee</span><b className="text-black">₹{inr(ticket.convenience)}</b></div>
+            <div className="mt-1 flex justify-between border-t border-slate-200 pt-1.5 text-sm font-extrabold"><span>Total</span><span>₹{inr(ticket.total)}</span></div>
+          </div>
+          <div className="flex items-center justify-between pt-3">
+            <div className="text-center"><QRCodeSVG value={ticket.bookingCode} size={110} /><div className="mt-1 text-[9px] text-slate-500">Show at entrance</div></div>
+            <div className="text-right"><div className="text-[9px] uppercase text-slate-400">Booking ID</div><div className="text-sm font-extrabold">{ticket.bookingCode}</div></div>
+          </div>
+          <p className="pt-2 text-center text-[10px] text-slate-500">Please show this ticket / QR code at the theatre entrance.</p>
         </div>
-        <div className="no-print mt-4 flex gap-2">
+        <div className="no-print flex gap-2 bg-slate-100 p-3">
           <button onClick={() => window.print()} className="flex-1 rounded-lg bg-green-700 p-3 font-bold text-white">🖨️ Print / PDF</button>
           <button onClick={() => { setTicket(null); setStep(1); setMovieId(""); setShowTime(""); setSelected([]); setMsg(""); }} className="flex-1 rounded-lg bg-slate-700 p-3 font-bold text-white">🎟️ New Booking</button>
         </div>
