@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 let _client: any = null;
@@ -26,6 +26,8 @@ export default function AdminPage() {
   const [movies, setMovies] = useState<any[]>([]);
   const [stats, setStats] = useState({ n: 0, seats: 0, rev: 0 });
   const [qr, setQr] = useState(""); const [qrRes, setQrRes] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const scannerRef = useRef<any>(null);
   // movie form
   const [f, setF] = useState({ id: "", title: "", timings: "", quality: "4K", start_date: "", end_date: "", description: "", poster_url: "" });
   const [file, setFile] = useState<File | null>(null);
@@ -107,12 +109,39 @@ export default function AdminPage() {
     alert(r.message); load();
   };
 
-  const verify = async () => {
+  const verify = async (code?: string) => {
+    const c = String(code ?? qr).trim();
+    if (!c) { setQrRes("Enter or scan a code first."); return; }
     const h = await authHeaders();
-    const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ code: qr.trim() }) }).then((r) => r.json());
+    const r = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json", ...(h as any) }, body: JSON.stringify({ code: c }) }).then((r) => r.json());
     setQrRes(r.success ? `✅ VALID — ${r.booking.customer_name} • ${(r.booking.seats || []).join(", ")} • ${r.booking.show_date} ${r.booking.show_time}` : `❌ ${r.message}`);
     load();
   };
+
+  const stopScan = async () => {
+    try { await scannerRef.current?.clear(); } catch {}
+    scannerRef.current = null;
+    setScanning(false);
+  };
+
+  const startScan = async () => {
+    setQrRes("");
+    setScanning(true);
+    try {
+      const { Html5QrcodeScanner } = await import("html5-qrcode");
+      const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+      scannerRef.current = scanner;
+      scanner.render(
+        (text: string) => { stopScan(); setQr(text); verify(text); },
+        () => {}
+      );
+    } catch (e: any) {
+      setScanning(false);
+      setQrRes("Camera failed: " + (e?.message || "permission denied. Use HTTPS and allow camera."));
+    }
+  };
+
+  useEffect(() => () => { try { scannerRef.current?.clear(); } catch {} }, []);
 
   if (!user) return (
     <div className="mx-auto mt-10 max-w-sm rounded-2xl border border-white/10 bg-card p-6">
@@ -142,7 +171,17 @@ export default function AdminPage() {
       {tab === "verify" && (
         <div className="mt-3 rounded-xl bg-card p-4">
           <h2 className="font-bold">📱 Verify Ticket (QR = booking code)</h2>
-          <div className="mt-2 flex gap-2"><input value={qr} onChange={(e) => setQr(e.target.value)} placeholder="Paste BK… code" className="flex-1 rounded-lg border border-white/15 bg-black/40 p-3 text-sm" /><button onClick={verify} className="rounded-lg bg-blue-600 px-4 font-bold">Verify</button></div>
+          <p className="mt-1 text-xs text-slate-400">Scan with camera, use a USB barcode scanner (click the box first, then scan), or paste the code.</p>
+          <div className="mt-2 flex gap-2">
+            <input value={qr} onChange={(e) => setQr(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") verify(); }} placeholder="Scan / paste BK… code" className="flex-1 rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />
+            <button onClick={() => verify()} className="rounded-lg bg-blue-600 px-4 font-bold">Verify</button>
+          </div>
+          <div className="mt-2">
+            {!scanning
+              ? <button onClick={startScan} className="w-full rounded-lg bg-slate-700 p-3 text-sm font-bold">📷 Scan with Camera</button>
+              : <button onClick={stopScan} className="w-full rounded-lg bg-red-700 p-3 text-sm font-bold">⏹ Stop Camera</button>}
+          </div>
+          {scanning && <div id="qr-reader" className="mt-2 overflow-hidden rounded-lg" />}
           {qrRes && <div className="mt-2 text-sm">{qrRes}</div>}
         </div>
       )}
