@@ -1,10 +1,10 @@
--- Sandhya Cine House — Supabase schema
+-- Ambadi 2k Cinemas — Supabase schema
 -- Run this in Supabase Dashboard → SQL Editor → New query → Paste → Run.
 
 -- 1) Settings (single row, id=1)
 create table if not exists settings (
   id int primary key,
-  theatre_name text not null default 'Sandhya Cine House',
+  theatre_name text not null default 'Ambadi 2k Cinemas',
   address text default '',
   phone text default '',
   email text default '',

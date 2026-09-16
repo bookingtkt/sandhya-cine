@@ -18,7 +18,7 @@ export default function BookingPage() {
   const [dates, setDates] = useState<string[]>([]);
   const [date, setDate] = useState("");
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [settings, setSettings] = useState<Settings>({ theatre_name: "Sandhya Cine House", ticket_price: 85, gst_percent: 0, convenience_fee: 0 });
+  const [settings, setSettings] = useState<Settings>({ theatre_name: "Ambadi 2k Cinemas", ticket_price: 85, gst_percent: 0, convenience_fee: 0 });
   const [movieId, setMovieId] = useState("");
   const [showTime, setShowTime] = useState("");
   const [search, setSearch] = useState("");
@@ -27,6 +27,7 @@ export default function BookingPage() {
   const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false); const [msg, setMsg] = useState("");
   const [ticket, setTicket] = useState<any>(null);
+  const [step, setStep] = useState(1); // 1 = movie+time, 2 = seats+confirm
   const [avail, setAvail] = useState<Record<string, number>>({});// seats left per "movieId::time"
 
   useEffect(() => {
@@ -46,36 +47,30 @@ export default function BookingPage() {
     })();
   }, [date]);
 
-  // seats-left per show for the chosen date (for the timing buttons)
+  // seats-left per show for the chosen date (via PII-free API)
   useEffect(() => {
     (async () => {
       setAvail({});
       if (!date) return;
       try {
-        const sb = supabase();
-        const { data } = await sb.from("bookings").select("movie_id,show_time,seats").eq("show_date", date).eq("status", "Confirmed");
-        const counts: Record<string, number> = {};
-        (data || []).forEach((b: any) => {
-          const k = b.movie_id + "::" + b.show_time;
-          counts[k] = (counts[k] || 0) + ((b.seats || []).length);
-        });
+        const r = await fetch(`/api/availability?date=${date}`).then((x) => x.json());
+        if (!r.success) return;
         const left: Record<string, number> = {};
-        Object.keys(counts).forEach((k) => { left[k] = TOTAL_SEATS - counts[k]; });
+        Object.keys(r.counts || {}).forEach((k) => { left[k] = TOTAL_SEATS - (r.counts[k] || 0); });
         setAvail(left);
       } catch {}
     })();
   }, [date]);
 
-  // load booked seats for chosen show
+  // load booked seats for chosen show (via PII-free API)
   useEffect(() => {
     (async () => {
       setBooked(new Set()); setSelected([]);
       if (!date || !movieId || !showTime) return;
-      const sb = supabase();
-      const { data } = await sb.from("bookings").select("seats").eq("show_date", date).eq("movie_id", movieId).eq("show_time", showTime).eq("status", "Confirmed");
-      const set = new Set<string>();
-      (data || []).forEach((b: any) => (b.seats || []).forEach((s: string) => set.add(String(s).toUpperCase())));
-      setBooked(set);
+      try {
+        const r = await fetch(`/api/availability?date=${date}&movieId=${movieId}&showTime=${encodeURIComponent(showTime)}`).then((x) => x.json());
+        if (r.success) setBooked(new Set((r.booked || []).map((s: string) => String(s).toUpperCase())));
+      } catch {}
     })();
   }, [date, movieId, showTime]);
 
@@ -86,6 +81,14 @@ export default function BookingPage() {
   const toggle = (s: string) => {
     if (booked.has(s)) return;
     setSelected((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
+  };
+
+  const goSeats = () => {
+    setMsg("");
+    if (!movieId || !showTime) { setMsg("Please select a movie and showtime."); return; }
+    if (isShowStarted(date, showTime)) { setMsg("This show has already started and can't be booked."); return; }
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const book = async () => {
@@ -100,10 +103,16 @@ export default function BookingPage() {
       const j = await res.json();
       if (!j.success) { setMsg(j.message || "Booking failed."); if (j.conflicts) { /* refresh booked */ } return; }
       setTicket(j); setSelected([]);
-      // refresh booked seats
-      const sb = supabase();
-      const { data } = await sb.from("bookings").select("seats").eq("show_date", date).eq("movie_id", movieId).eq("show_time", showTime).eq("status", "Confirmed");
-      const set = new Set<string>(); (data || []).forEach((b: any) => (b.seats || []).forEach((s: string) => set.add(String(s).toUpperCase()))); setBooked(set);
+      // refresh booked seats + counts
+      try {
+        const r = await fetch(`/api/availability?date=${date}&movieId=${movieId}&showTime=${encodeURIComponent(showTime)}`).then((x) => x.json());
+        if (r.success) {
+          setBooked(new Set((r.booked || []).map((s: string) => String(s).toUpperCase())));
+          const left: Record<string, number> = {};
+          Object.keys(r.counts || {}).forEach((k) => { left[k] = TOTAL_SEATS - (r.counts[k] || 0); });
+          setAvail(left);
+        }
+      } catch {}
     } catch (e: any) { setMsg(e.message); } finally { setLoading(false); }
   };
 
@@ -126,7 +135,7 @@ export default function BookingPage() {
         </div>
         <div className="no-print mt-4 flex gap-2">
           <button onClick={() => window.print()} className="flex-1 rounded-lg bg-green-700 p-3 font-bold text-white">🖨️ Print / PDF</button>
-          <button onClick={() => setTicket(null)} className="flex-1 rounded-lg bg-slate-700 p-3 font-bold text-white">🎟️ New Booking</button>
+          <button onClick={() => { setTicket(null); setStep(1); setMovieId(""); setShowTime(""); setSelected([]); setMsg(""); }} className="flex-1 rounded-lg bg-slate-700 p-3 font-bold text-white">🎟️ New Booking</button>
         </div>
       </div>
     );
@@ -138,7 +147,7 @@ export default function BookingPage() {
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Search movies…" className="mt-2 w-full rounded-xl border border-white/15 bg-card p-3 text-sm outline-none" />
       <div className="seat-scroll mt-3 flex gap-2 overflow-x-auto pb-1">
         {dates.map((d) => (
-          <button key={d} onClick={() => { setDate(d); setMovieId(""); setShowTime(""); }} className={`min-w-[64px] rounded-xl border p-2 text-center ${d === date ? "bg-brand text-black" : "bg-card text-white"}`}>
+          <button key={d} onClick={() => { setDate(d); setMovieId(""); setShowTime(""); setStep(1); setMsg(""); }} className={`min-w-[64px] rounded-xl border p-2 text-center ${d === date ? "bg-brand text-black" : "bg-card text-white"}`}>
             <div className="text-lg font-extrabold">{d.slice(8)}</div>
             <div className="text-[11px]">{new Date(d + "T00:00").toLocaleDateString("en-IN", { weekday: "short" })}</div>
             <div className="text-[10px] opacity-70">{new Date(d + "T00:00").toLocaleDateString("en-IN", { month: "short" })}</div>
@@ -146,6 +155,14 @@ export default function BookingPage() {
         ))}
       </div>
 
+      <div className="mt-3 flex items-center text-[11px] font-bold">
+        <div className={`flex items-center gap-1 ${step === 1 ? "text-white" : "text-green-400"}`}><span className={`grid h-6 w-6 place-items-center rounded-full ${step === 1 ? "bg-brand text-black" : "bg-green-500 text-black"}`}>{step > 1 ? "✓" : "1"}</span> Movie</div>
+        <div className="mx-2 h-px flex-1 bg-white/15" />
+        <div className={`flex items-center gap-1 ${step === 2 ? "text-white" : "text-slate-500"}`}><span className={`grid h-6 w-6 place-items-center rounded-full ${step === 2 ? "bg-brand text-black" : "bg-white/10 text-slate-400"}`}>2</span> Seats & Confirm</div>
+      </div>
+
+      {step === 1 && (
+      <>
       <h3 className="mb-2 mt-4 text-lg font-extrabold">▍Now Showing</h3>
       <div className="grid gap-3">
         {filtered.map((m) => (
@@ -178,6 +195,13 @@ export default function BookingPage() {
       </div>
 
       {movieId && showTime && (
+        <button onClick={goSeats} className="mt-3 w-full rounded-xl bg-brand p-3.5 font-extrabold text-black">Continue to Seats →</button>
+      )}
+      {msg && <div className="mt-2 text-center text-xs text-yellow-300">{msg}</div>}
+      </>
+      )}
+
+      {step === 2 && movieId && showTime && (
         <div className="mt-4 rounded-2xl border border-white/10 bg-card p-3">
           <div className="text-center text-sm font-bold">{movie?.title} • {displayDate(date)} • {showTime}</div>
           <div className="mx-auto mt-3 max-w-sm"><div className="h-1.5 rounded-full bg-white shadow-[0_0_12px_#fff9]" /><div className="mt-1 text-center text-[10px] tracking-[4px] text-slate-400">SCREEN</div></div>
@@ -211,6 +235,7 @@ export default function BookingPage() {
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm" />
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (ticket will be sent)" className="rounded-xl border border-white/15 bg-black/40 p-3 text-sm" />
             <button disabled={loading || !selected.length} onClick={book} className="rounded-xl bg-brand p-3.5 font-extrabold text-black disabled:opacity-40">{loading ? "Booking…" : "Confirm Booking & Email Ticket"}</button>
+            <button onClick={() => { setStep(1); setMsg(""); }} className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm font-bold">← Back to Movie</button>
             {msg && <div className="text-center text-xs text-yellow-300">{msg}</div>}
           </div>
         </div>

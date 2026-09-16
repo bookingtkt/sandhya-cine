@@ -1,4 +1,4 @@
-# Sandhya Cine House — Vercel + Supabase (migrated from Apps Script)
+# Ambadi 2k Cinemas — Vercel + Supabase (migrated from Apps Script)
 
 Modern, user-friendly movie ticket booking. Same 250-seat layout (rows A–L), pricing with GST + convenience fee, QR tickets, admin dashboard.
 

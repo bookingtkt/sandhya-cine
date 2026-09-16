@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Sandhya Cine House — Book Tickets",
+  title: "Ambadi 2k Cinemas — Book Tickets",
   description: "Movie ticket booking"
 };
 
@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-white/10 bg-[#05080c]/95 backdrop-blur">
             <div className="grid h-9 w-9 place-items-center rounded-full bg-brand text-lg text-black">●</div>
             <div className="flex-1">
-              <div className="text-lg font-extrabold">Sandhya Cine House</div>
+              <div className="text-lg font-extrabold">Ambadi 2k Cinemas</div>
               <div className="text-xs text-slate-400">Movies • Book Tickets • Enjoy Cinema</div>
             </div>
             <a href="/admin" className="no-print rounded-lg border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10">Admin</a>
