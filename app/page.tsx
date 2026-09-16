@@ -7,6 +7,16 @@ import { SEAT_LAYOUT, calcPricing, inr, toISODate, displayDate, TOTAL_SEATS, isS
 const supabase = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 
+const BOOKING_NOTES = [
+  "Entry is allowed only for valid ticket holders.",
+  "Children above the age of 3 years require tickets.",
+  "Tickets once purchased cannot be cancelled, exchanged or refunded.",
+  "Outside food and beverages are not allowed inside the cinema premises.",
+  "Patrons under the influence of alcohol or drugs will not be allowed inside the Cinema Premises.",
+  "3D movie ticket price includes charges for 3D glass usage, 3D glass need to be returned after the movie.",
+  "Luggage bags or electronic recording devices are not allowed inside the cinema. Anyone found recording or taking photos will face legal action.",
+];
+
 type Movie = {
   id: string; title: string; poster_url: string; description: string;
   start_date: string; end_date: string; timings: string[];
@@ -28,6 +38,7 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(false); const [msg, setMsg] = useState("");
   const [ticket, setTicket] = useState<any>(null);
   const [step, setStep] = useState(1); // 1 = movie+time, 2 = seats+confirm
+  const [showNotes, setShowNotes] = useState(false);// booking-notes popup after "Continue to Seats"
   const [avail, setAvail] = useState<Record<string, number>>({});// seats left per "movieId::time"
 
   useEffect(() => {
@@ -87,8 +98,17 @@ export default function BookingPage() {
     setMsg("");
     if (!movieId || !showTime) { setMsg("Please select a movie and showtime."); return; }
     if (isBookingClosed(date, showTime)) { setMsg("Online booking closed for this show. Tickets are available at the counter."); return; }
+    setShowNotes(true);
+  };
+
+  const acceptNotes = () => {
+    setShowNotes(false);
     setStep(2);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelNotes = () => {
+    setShowNotes(false);
   };
 
   const book = async () => {
@@ -257,6 +277,31 @@ export default function BookingPage() {
             <button disabled={loading || !selected.length} onClick={book} className="rounded-xl bg-brand p-3.5 font-extrabold text-black disabled:opacity-40">{loading ? "Booking…" : "Confirm Booking & Email Ticket"}</button>
             <button onClick={() => { setStep(1); setMsg(""); }} className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm font-bold">← Back to Movie</button>
             {msg && <div className="text-center text-xs text-yellow-300">{msg}</div>}
+          </div>
+        </div>
+      )}
+      {showNotes && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onClick={cancelNotes}>
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl bg-white text-black shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Booking notes"
+          >
+            <div className="bg-black p-4 text-center text-white">
+              <h2 className="text-base font-extrabold tracking-wide">📋 Notes</h2>
+              <p className="mt-0.5 text-[11px] text-slate-400">{movie?.title} • {displayDate(date)} • {showTime}</p>
+            </div>
+            <ol className="max-h-[50vh] list-decimal space-y-2 overflow-y-auto p-5 pl-9 text-[13px] leading-relaxed">
+              {BOOKING_NOTES.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ol>
+            <div className="flex gap-2 bg-slate-100 p-3">
+              <button onClick={cancelNotes} className="flex-1 rounded-lg bg-slate-600 p-3 font-bold text-white">Cancel</button>
+              <button onClick={acceptNotes} autoFocus className="flex-1 rounded-lg bg-green-700 p-3 font-bold text-white">Accept</button>
+            </div>
           </div>
         </div>
       )}
