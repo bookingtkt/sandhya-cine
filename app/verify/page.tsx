@@ -22,6 +22,7 @@ type ScanEntry = {
   message: string;
   detail: string;
   time: string;
+  seats: number;
 };
 
 function beep(ok: boolean) {
@@ -95,15 +96,16 @@ export default function FastVerifyPage() {
         headers: { "Content-Type": "application/json", "x-admin-token": t },
         body: JSON.stringify({ code }),
       }).then((x) => x.json());
+      const seatList: string[] = r.booking?.seats || [];
       const entry: ScanEntry = r.success
-        ? { code, ok: true, message: "VALID", detail: `${r.booking?.customer_name || ""} • ${(r.booking?.seats || []).join(", ")} • ${r.booking?.show_date || ""} ${r.booking?.show_time || ""}`, time: new Date().toLocaleTimeString("en-IN") }
-        : { code, ok: false, message: String(r.message || "Invalid").replace(/❌|⚠️/g, "").trim(), detail: r.booking ? `${r.booking?.customer_name || ""} • ${(r.booking?.seats || []).join(", ")}` : "", time: new Date().toLocaleTimeString("en-IN") };
+        ? { code, ok: true, message: `VALID (${seatList.length} seat${seatList.length === 1 ? "" : "s"})`, detail: `${r.booking?.customer_name || ""} • ${seatList.join(", ")} • ${r.booking?.show_date || ""} ${r.booking?.show_time || ""}`, time: new Date().toLocaleTimeString("en-IN"), seats: seatList.length }
+        : { code, ok: false, message: String(r.message || "Invalid").replace(/❌|⚠️/g, "").trim(), detail: r.booking ? `${r.booking?.customer_name || ""} • ${seatList.join(", ")}` : "", time: new Date().toLocaleTimeString("en-IN"), seats: seatList.length };
       setLast(entry);
       setHistory((h) => [entry, ...h].slice(0, 50));
       setCounts((c) => entry.ok ? { ...c, ok: c.ok + 1 } : /ALREADY USED/i.test(entry.message) ? { ...c, used: c.used + 1 } : { ...c, bad: c.bad + 1 });
       beep(entry.ok);
     } catch (e: any) {
-      const entry: ScanEntry = { code, ok: false, message: e?.message || "Network error", detail: "", time: new Date().toLocaleTimeString("en-IN") };
+      const entry: ScanEntry = { code, ok: false, message: e?.message || "Network error", detail: "", time: new Date().toLocaleTimeString("en-IN"), seats: 0 };
       setLast(entry);
       setHistory((h) => [entry, ...h].slice(0, 50));
       setCounts((c) => ({ ...c, bad: c.bad + 1 }));
