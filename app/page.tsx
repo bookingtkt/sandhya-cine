@@ -164,7 +164,7 @@ export default function BookingPage() {
           </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-b border-dashed border-slate-300 py-3 text-xs">
             <div><div className="text-[9px] uppercase text-slate-400">Booking ID</div><b className="break-all">{ticket.bookingCode}</b></div>
-            <div><div className="text-[9px] uppercase text-slate-400">Seats</div><b>{(ticket.seats || []).join(", ")}</b></div>
+            <div><div className="text-[9px] uppercase text-slate-400">Seats</div><b>{(ticket.seats || []).join(", ")}</b><div className="mt-1 text-sm font-extrabold">Total Seats: {(ticket.seats || []).length}</div></div>
             <div><div className="text-[9px] uppercase text-slate-400">Customer</div><b>{name}</b></div>
             <div><div className="text-[9px] uppercase text-slate-400">Phone</div><b>{phone}</b></div>
           </div>

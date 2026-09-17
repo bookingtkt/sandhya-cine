@@ -192,7 +192,8 @@ export default function AdminPage() {
       {tab === "verify" && (
         <div className="mt-3 rounded-xl bg-card p-4">
           <h2 className="font-bold">📱 Verify Ticket (QR = booking code)</h2>
-          <p className="mt-1 text-xs text-slate-400">Scan with camera, use a USB barcode scanner (click the box first, then scan), or paste the code.</p>
+          <a href="/verify" className="mt-2 block rounded-lg bg-green-700 p-3 text-center text-sm font-bold">⚡ Open Fast Scanner (auto-verify, rapid next) →</a>
+          <p className="mt-2 text-xs text-slate-400">Scan with camera, use a USB barcode scanner (click the box first, then scan), or paste the code.</p>
           <div className="mt-2 flex gap-2">
             <input value={qr} onChange={(e) => setQr(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") verify(); }} placeholder="Scan / paste BK… code" className="flex-1 rounded-lg border border-white/15 bg-black/40 p-3 text-sm" />
             <button onClick={() => verify()} className="rounded-lg bg-blue-600 px-4 font-bold">Verify</button>
